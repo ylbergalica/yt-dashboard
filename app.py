@@ -24,7 +24,7 @@ import customtkinter as ctk
 import config
 from database import Database
 from analyzer import (AnalysisWorker, EVT_STARTED, EVT_RESULT, EVT_BATCH, EVT_IDLE)
-from ui_widgets import ImageCache, SummaryCard, CategoryCard
+from ui_widgets import ImageCache, SummaryCard, CategoryCard, bind_card
 from video_row import VideoRow, COLUMNS, configure_columns
 from edit_window import EditWindow
 
@@ -133,22 +133,16 @@ class DashboardApp(ctk.CTk):
                              text_color=config.COLORS["text_faint"])
         count.pack(side="right", padx=14)
 
-        def enter(_e):
+        def enter():
             if self.filter_category.get() != category or is_all:
                 row.configure(fg_color=config.COLORS["panel_alt"])
 
-        def leave(_e):
-            self._restyle_nav()
-
-        def click(_e):
+        def click():
             self.filter_category.set(category)
             self.cat_filter_menu.set(category if category in config.CATEGORIES else "All")
             self.refresh_all()
 
-        for w in (row, name, count):
-            w.bind("<Enter>", enter, add="+")
-            w.bind("<Leave>", leave, add="+")
-            w.bind("<Button-1>", click, add="+")
+        bind_card(row, on_enter=enter, on_leave=self._restyle_nav, on_click=click)
 
         row._name = name
         row._count = count

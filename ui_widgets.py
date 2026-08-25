@@ -21,6 +21,58 @@ THUMB_SIZE = (96, 54)   # 16:9 preview used in the table
 
 
 # --------------------------------------------------------------------------- #
+#  Whole-widget interaction helper
+# --------------------------------------------------------------------------- #
+def _iter_descendants(widget):
+    """Yield the widget and every widget nested inside it."""
+    yield widget
+    for child in widget.winfo_children():
+        yield from _iter_descendants(child)
+
+
+def _pointer_inside(widget) -> bool:
+    """True if the mouse pointer is currently over `widget` or any descendant."""
+    try:
+        x, y = widget.winfo_pointerxy()
+        under = widget.winfo_containing(x, y)
+    except Exception:
+        return False
+    while under is not None:
+        if under == widget:
+            return True
+        under = getattr(under, "master", None)
+    return False
+
+
+def bind_card(widget, on_enter=None, on_leave=None, on_click=None):
+    """
+    Make an entire composite widget behave as one hover/click target.
+
+    Binding only the container is unreliable in Tk: <Leave> fires the moment the
+    pointer crosses onto a child window. We bind every descendant and gate the
+    real leave behind a pointer-containment check, so hover/click cover the
+    whole visible area exactly.
+    """
+    def handle_enter(_e):
+        if on_enter:
+            on_enter()
+
+    def handle_leave(_e):
+        if on_leave and not _pointer_inside(widget):
+            on_leave()
+
+    def handle_click(_e):
+        if on_click:
+            on_click()
+
+    for w in _iter_descendants(widget):
+        w.bind("<Enter>", handle_enter, add="+")
+        w.bind("<Leave>", handle_leave, add="+")
+        if on_click:
+            w.bind("<Button-1>", handle_click, add="+")
+
+
+# --------------------------------------------------------------------------- #
 #  Thumbnail image cache
 # --------------------------------------------------------------------------- #
 class ImageCache:
@@ -163,14 +215,15 @@ class CategoryCard(ctk.CTkFrame):
         )
         self.count_lbl.pack(anchor="w")
 
-        for w in (self, inner, dot, text_col, self.count_lbl):
-            w.bind("<Button-1>", self._clicked)
-        self.bind("<Enter>", lambda e: self.configure(
-            border_color=colors["fg"]))
-        self.bind("<Leave>", lambda e: self.configure(
-            border_color=config.COLORS["border"]))
+        self._accent = colors["fg"]
+        bind_card(
+            self,
+            on_enter=lambda: self.configure(border_color=self._accent),
+            on_leave=lambda: self.configure(border_color=config.COLORS["border"]),
+            on_click=self._clicked,
+        )
 
-    def _clicked(self, _e):
+    def _clicked(self):
         if self.on_click:
             self.on_click(self.category)
 
